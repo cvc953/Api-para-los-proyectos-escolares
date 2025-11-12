@@ -93,6 +93,14 @@ def login(email: str, password: str, session: Session = Depends(get_session)):
 @app.post("/proyectos", response_model=ProyectoResponse)
 def crear_proyecto(proyecto: ProyectoCreate, session: Session = Depends(get_session)):
     """Crear nuevo proyecto"""
+    # Validar que estudiante y profesor existen
+    estudiante = session.get(Estudiante, proyecto.estudiante_id)
+    if not estudiante:
+        raise HTTPException(status_code=400, detail="Estudiante no encontrado")
+    profesor = session.get(Profesor, proyecto.profesor_id)
+    if not profesor:
+        raise HTTPException(status_code=400, detail="Profesor no encontrado")
+
     nuevo_proyecto = Proyecto(
         titulo=proyecto.titulo,
         descripcion=proyecto.descripcion,
@@ -102,33 +110,41 @@ def crear_proyecto(proyecto: ProyectoCreate, session: Session = Depends(get_sess
         version_actual=1,
         calificacion_actual=None
     )
-    session.add(nuevo_proyecto)
-    session.commit()
-    session.refresh(nuevo_proyecto)
-    
-    # Crear primera versión
-    primera_version = ProyectoVersion(
-        proyecto_id=nuevo_proyecto.id,
-        numero_version=1,
-        archivo_path=proyecto.nombre_archivo,
-        descripcion=proyecto.comentarios_version,
-        es_version_actual=True
-    )
-    session.add(primera_version)
-    session.commit()
-    
-    return ProyectoResponse(
-        id=nuevo_proyecto.id,
-        titulo=nuevo_proyecto.titulo,
-        descripcion=nuevo_proyecto.descripcion,
-        estudiante_id=nuevo_proyecto.estudiante_id,
-        profesor_id=nuevo_proyecto.profesor_id,
-        fecha_entrega=nuevo_proyecto.fecha_entrega,
-        fecha_creacion=nuevo_proyecto.fecha_creacion,
-        version_actual=1,
-        calificacion_actual=None,
-        total_versiones=1
-    )
+    try:
+        session.add(nuevo_proyecto)
+        session.commit()
+        session.refresh(nuevo_proyecto)
+
+        # Crear primera versión
+        primera_version = ProyectoVersion(
+            proyecto_id=nuevo_proyecto.id,
+            numero_version=1,
+            archivo_path=proyecto.nombre_archivo,
+            descripcion=proyecto.comentarios_version,
+            es_version_actual=True
+        )
+        session.add(primera_version)
+        session.commit()
+
+        return ProyectoResponse(
+            id=nuevo_proyecto.id,
+            titulo=nuevo_proyecto.titulo,
+            descripcion=nuevo_proyecto.descripcion,
+            estudiante_id=nuevo_proyecto.estudiante_id,
+            profesor_id=nuevo_proyecto.profesor_id,
+            fecha_entrega=nuevo_proyecto.fecha_entrega,
+            fecha_creacion=nuevo_proyecto.fecha_creacion,
+            version_actual=1,
+            calificacion_actual=None,
+            total_versiones=1
+        )
+    except Exception as e:
+        # Intentar rollback y devolver un error legible
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Error al crear proyecto: {str(e)}")
 
 @app.get("/proyectos/{proyecto_id}", response_model=ProyectoResponse)
 def obtener_proyecto(proyecto_id: int, session: Session = Depends(get_session)):
