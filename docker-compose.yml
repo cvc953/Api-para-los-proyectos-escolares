@@ -1,22 +1,41 @@
-version: '3.8'
-
 services:
-  api:
-    build: ./api_python
+  db:
+    image: mysql:8.0
     restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-plataforma_proyectos}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-apppassword}
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
     ports:
       - "8000:8000"
     environment:
-      # REQUIRED: Provide a full DATABASE_URL (example below) in an env file or
-      # when running the container. Example:
-      # mysql+pymysql://user:password@host:3306/dbname?charset=utf8mb4
-      DATABASE_URL: ${DATABASE_URL}
-      # Optional helpers (used by the entrypoint wait logic if you want):
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-    # The image already contains the application; do not mount source by default
-    # to keep the container self-contained in production. For development you can
-    # override this with a bind mount if desired.
-    # volumes:
-    #   - ./api_python:/app:ro
+      DB_HOST: db
+      DB_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-plataforma_proyectos}
+      MYSQL_USER: ${MYSQL_USER:-appuser}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-apppassword}
+      DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://${MYSQL_USER:-appuser}:${MYSQL_PASSWORD:-apppassword}@db:3306/${MYSQL_DATABASE:-plataforma_proyectos}?charset=utf8mb4}
+    volumes:
+      # For development you can bind-mount the source directory. In compose this
+      # file is inside `api_python/`, so `.` maps to that folder.
+      - ./:/app:ro
+
+volumes:
+  db_data:
 
