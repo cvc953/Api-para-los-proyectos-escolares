@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
@@ -54,7 +54,14 @@ def root():
 
 # ==================== AUTENTICACIÓN ====================
 @app.post("/auth/registro")
-def registro(email: str, password: str, nombre: str, apellido: str, rol: str = "estudiante", session: Session = Depends(get_session)):
+def registro(
+    email: str = Form(...),
+    password: str = Form(...),
+    nombre: str = Form(...),
+    apellido: str = Form(...),
+    rol: str = Form("estudiante"),
+    session: Session = Depends(get_session)
+):
     """Registrar nuevo usuario (estudiante, profesor o padre)"""
     # Verificar si existe
     statement = select(Estudiante).where(Estudiante.email == email)
@@ -75,7 +82,7 @@ def registro(email: str, password: str, nombre: str, apellido: str, rol: str = "
         return {"id": usuario.id, "email": usuario.email, "rol": "profesor"}
 
 @app.post("/auth/login")
-def login(email: str, password: str, session: Session = Depends(get_session)):
+def login(email: str = Form(...), password: str = Form(...), session: Session = Depends(get_session)):
     """Login y obtener token JWT"""
     statement = select(Estudiante).where(Estudiante.email == email)
     user = session.exec(statement).first()
