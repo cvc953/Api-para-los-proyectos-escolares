@@ -31,10 +31,12 @@ services:
       MYSQL_USER: ${MYSQL_USER:-appuser}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-apppassword}
       DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://${MYSQL_USER:-appuser}:${MYSQL_PASSWORD:-apppassword}@db:3306/${MYSQL_DATABASE:-plataforma_proyectos}?charset=utf8mb4}
+      UPLOAD_DIR: /app/uploads
     volumes:
       # For development you can bind-mount the source directory. In compose this
       # file is inside `api_python/`, so `.` maps to that folder.
       - ./:/app:ro
+  - ./uploads:/app/uploads:rw
 
 volumes:
   db_data:

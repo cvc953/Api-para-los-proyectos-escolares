@@ -6,11 +6,15 @@
 ```
 POST /auth/registro
 ```
-**Parámetros Query:**
-- `email` (string, requerido)
-- `password` (string, requerido)
-- `nombre` (string, requerido)
-- `apellido` (string, requerido)
+**Entrada:**
+- Preferible: enviar como form-data (multipart/form-data) usando `-F` en curl.
+- Alternativa: la API ofrece un *fallback* y aceptará también parámetros por query (ej. `?email=...&password=...`) pero el método recomendado es form-data.
+
+Campos (obligatorios):
+- `email` (string)
+- `password` (string)
+- `nombre` (string)
+- `apellido` (string)
 - `rol` (string, opcional): `estudiante` | `profesor` (default: `estudiante`)
 
 **Respuesta (200):**
@@ -28,9 +32,7 @@ POST /auth/registro
 ```
 POST /auth/login
 ```
-**Parámetros Query:**
-- `email` (string, requerido)
-- `password` (string, requerido)
+**Entrada:** enviar `email` y `password` como form-data (`-F`) — la ruta actual está preparada para recibir form-data.
 
 **Respuesta (200):**
 ```json
@@ -52,18 +54,17 @@ Incluir en header `Authorization: Bearer {token}` en requests posteriores.
 ```
 POST /proyectos
 ```
-**Body (JSON):**
-```json
-{
-  "titulo": "App Mobile",
-  "descripcion": "Aplicación de reservas",
-  "estudiante_id": 1,
-  "profesor_id": 2,
-  "fecha_entrega": "2025-12-15T23:59:59",
-  "nombre_archivo": "app-v1.zip",
-  "comentarios_version": "Primera entrega"
-}
-```
+**Entrada:**
+- Preferible: enviar multipart/form-data (curl `-F`) con los campos del proyecto y un archivo opcional en el campo `file`.
+
+Campos:
+- `titulo` (string, requerido)
+- `descripcion` (string, requerido)
+- `estudiante_id` (int, requerido)
+- `profesor_id` (int, requerido)
+- `fecha_entrega` (ISO datetime string, opcional) e.g. `2025-12-15T23:59:59`
+- `comentarios_version` (string, opcional)
+- `file` (file, opcional): archivo del proyecto que se guardará y asociará a la primera versión
 
 **Respuesta (201):**
 ```json
@@ -81,6 +82,23 @@ POST /proyectos
 ```
 GET /proyectos/{proyecto_id}
 ```
+
+### Descargar archivo del proyecto (versión actual)
+```
+GET /proyectos/{proyecto_id}/archivo
+```
+- Descarga el archivo asociado a la versión actual del proyecto (si existe).
+- Respuesta: binary file (Content-Disposition con filename).
+ - Descarga el archivo asociado a la versión actual del proyecto (si existe).
+ - El archivo se servirá con su nombre y formato original (extensión) y con el Content-Type detectado por extensión; curl con `-O -J` guardará el archivo con su nombre y extensión originales.
+
+**Nota sobre almacenamiento de archivos**: La API utiliza una ruta de filesystem para almacenar archivos. Si `UPLOAD_DIR` no está disponible o no es escribible, las rutas de subida devolverán HTTP 503. Revisa `README-INSTALACION.md` para pasos rápidos sobre montaje de volumen y permisos.
+
+### Descargar archivo de una versión específica
+```
+GET /proyectos/{proyecto_id}/versiones/{version_id}/archivo
+```
+- Descarga el archivo asociado a la versión indicada.
 
 ---
 
@@ -104,8 +122,11 @@ GET /proyectos/profesor/{profesor_id}
 ```
 POST /proyectos/{proyecto_id}/versiones
 ```
-**Parámetros Query:**
-- `descripcion` (string, requerido): Cambios realizados
+**Entrada (multipart/form-data):**
+- Preferible: enviar `descripcion` como campo form-data y un archivo opcional en el campo `file`.
+- Ejemplo curl: `-F 'descripcion=Corrección de errores' -F 'file=@/ruta/a/archivo.zip'`
+
+La API aceptará también `descripcion` por query en modo fallback, pero el método recomendado para subir archivos es multipart/form-data.
 
 **Respuesta (200):**
 ```json

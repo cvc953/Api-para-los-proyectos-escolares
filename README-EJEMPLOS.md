@@ -2,14 +2,25 @@
 
 ## 1. Registrar Usuario
 
-### Estudiante
+
+### Estudiante (recomendado: form-data)
 ```bash
-curl -X POST "http://localhost:8000/auth/registro?email=juan@ejemplo.com&password=123456&nombre=Juan&apellido=García&rol=estudiante"
+curl -X POST "http://localhost:8000/auth/registro" \
+  -F 'email=juan@ejemplo.com' \
+  -F 'password=123456' \
+  -F 'nombre=Juan' \
+  -F 'apellido=García' \
+  -F 'rol=estudiante'
 ```
 
-### Profesor
+### Profesor (recomendado: form-data)
 ```bash
-curl -X POST "http://localhost:8000/auth/registro?email=profesor@ejemplo.com&password=123456&nombre=Dr.&apellido=Fernández&rol=profesor"
+curl -X POST "http://localhost:8000/auth/registro" \
+  -F 'email=profesor@ejemplo.com' \
+  -F 'password=123456' \
+  -F 'nombre=Dr.' \
+  -F 'apellido=Fernández' \
+  -F 'rol=profesor'
 ```
 
 ---
@@ -17,7 +28,9 @@ curl -X POST "http://localhost:8000/auth/registro?email=profesor@ejemplo.com&pas
 ## 2. Login y Obtener Token
 
 ```bash
-curl -X POST "http://localhost:8000/auth/login?email=juan@ejemplo.com&password=123456"
+curl -X POST "http://localhost:8000/auth/login" \
+  -F 'email=juan@ejemplo.com' \
+  -F 'password=123456'
 ```
 
 **Salida:**
@@ -34,30 +47,69 @@ curl -X POST "http://localhost:8000/auth/login?email=juan@ejemplo.com&password=1
 TOKEN="eyJ0eXAiOiJKV1QiLCJhbGc..."
 ```
 
+## Ejecutar el script de pruebas
+
+Hay un pequeño script de integración en `api_python/scripts/test_endpoints.sh` que ejecuta el flujo feliz (registra un estudiante y un profesor, crea un proyecto, sube versión, califica y obtiene el reporte). Requiere `jq`.
+
+Ejecutar:
+```bash
+cd /home/christian/Proyecto-Plataformaproyectosescolares/api_python
+chmod +x scripts/test_endpoints.sh
+./scripts/test_endpoints.sh http://127.0.0.1:8000
+```
+
 ---
 
 ## 3. Crear Proyecto
 
+Crear proyecto con archivo (multipart/form-data):
+
 ```bash
 curl -X POST "http://localhost:8000/proyectos" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "titulo": "Sistema de Biblioteca",
-    "descripcion": "Aplicación web para gestión de biblioteca",
-    "estudiante_id": 1,
-    "profesor_id": 2,
-    "fecha_entrega": "2025-12-20T23:59:59",
-    "nombre_archivo": "biblioteca-v1.zip",
-    "comentarios_version": "Entrega inicial con modelos"
-  }'
+  -F 'titulo=Sistema de Biblioteca' \
+  -F 'descripcion=Aplicación web para gestión de biblioteca' \
+  -F 'estudiante_id=1' \
+  -F 'profesor_id=2' \
+  -F 'fecha_entrega=2025-12-20T23:59:59' \
+  -F 'comentarios_version=Entrega inicial con modelos' \
+  -F 'file=@/ruta/a/biblioteca-v1.zip'
 ```
 
 ---
 
 ## 4. Subir Nueva Versión
 
+Subir nueva versión (multipart/form-data con archivo opcional):
+
 ```bash
-curl -X POST "http://localhost:8000/proyectos/1/versiones?descripcion=Agregada%20funcionalidad%20de%20búsqueda"
+curl -X POST "http://localhost:8000/proyectos/1/versiones" \
+  -F 'descripcion=Agregada funcionalidad de búsqueda' \
+  -F 'file=@/ruta/a/entrega_v2.zip'
+```
+
+Si estás ejecutando la API en Docker y ves errores de permisos al subir (Permission denied), crea y asigna permisos a la carpeta `uploads` en el host antes de arrancar los contenedores:
+
+```bash
+cd /home/christian/Proyecto-Plataformaproyectosescolares/api_python
+mkdir -p uploads
+sudo chown -R 1000:1000 uploads    # o usar chmod 0777 para desarrollo rápido
+sudo docker compose up -d --build
+```
+
+## 11. Descargar archivo del proyecto (versión actual)
+
+```bash
+curl -O -J "http://localhost:8000/proyectos/1/archivo"
+```
+
+`-O -J` hace que curl guarde el archivo usando el filename provisto por el servidor.
+
+Nota: el archivo se descargará con la misma extensión/formato con el que fue subido; el servidor intentará inferir el Content-Type a partir de la extensión.
+
+## 12. Descargar archivo de una versión específica
+
+```bash
+curl -O -J "http://localhost:8000/proyectos/1/versiones/3/archivo"
 ```
 
 ---

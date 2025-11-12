@@ -1,5 +1,12 @@
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+import mimetypes
+import re
+import os
+import shutil
+from pathlib import Path
+import sys
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -36,6 +43,24 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     init_db()
+
+# Carpeta donde se guardan los archivos subidos.
+# Intentamos crearla en orden: variable env -> /tmp/uploads. Si ninguna es escribible,
+# deshabilitamos temporalmente el soporte de uploads para evitar que la app falle al importar.
+UPLOAD_DIR = None
+_preferred = os.environ.get("UPLOAD_DIR") or "./uploads"
+try:
+    p = Path(_preferred)
+    p.mkdir(parents=True, exist_ok=True)
+    UPLOAD_DIR = p
+except Exception:
+    try:
+        p = Path("/tmp/uploads")
+        p.mkdir(parents=True, exist_ok=True)
+        UPLOAD_DIR = p
+    except Exception:
+        UPLOAD_DIR = None
+        print("WARNING: uploads disabled — cannot create upload directory.", file=sys.stderr)
 
 # ==================== RUTAS RAÍZ ====================
 @app.get("/")
@@ -120,36 +145,69 @@ def login(email: str = Form(...), password: str = Form(...), session: Session = 
 
 # ==================== PROYECTOS ====================
 @app.post("/proyectos", response_model=ProyectoResponse)
-def crear_proyecto(proyecto: ProyectoCreate, session: Session = Depends(get_session)):
-    """Crear nuevo proyecto"""
+def crear_proyecto(
+    titulo: str = Form(...),
+    descripcion: str = Form(...),
+    estudiante_id: int = Form(...),
+    profesor_id: int = Form(...),
+    fecha_entrega: Optional[str] = Form(None),
+    comentarios_version: Optional[str] = Form(None),
+    file: UploadFile = File(None),
+    session: Session = Depends(get_session)
+):
+    """Crear nuevo proyecto y opcionalmente subir el archivo inicial.
+
+    Se acepta multipart/form-data con los campos como `-F` en curl y un archivo
+    en el campo `file`.
+    """
     # Validar que estudiante y profesor existen
-    estudiante = session.get(Estudiante, proyecto.estudiante_id)
+    estudiante = session.get(Estudiante, estudiante_id)
     if not estudiante:
         raise HTTPException(status_code=400, detail="Estudiante no encontrado")
-    profesor = session.get(Profesor, proyecto.profesor_id)
+    profesor = session.get(Profesor, profesor_id)
     if not profesor:
         raise HTTPException(status_code=400, detail="Profesor no encontrado")
 
+    # Parse fecha_entrega si viene como string
+    fecha_dt = None
+    if fecha_entrega:
+        try:
+            fecha_dt = datetime.fromisoformat(fecha_entrega)
+        except Exception:
+            raise HTTPException(status_code=422, detail="fecha_entrega debe ser ISO datetime (ej. 2025-12-01T23:59:00)")
+
     nuevo_proyecto = Proyecto(
-        titulo=proyecto.titulo,
-        descripcion=proyecto.descripcion,
-        estudiante_id=proyecto.estudiante_id,
-        profesor_id=proyecto.profesor_id,
-        fecha_entrega=proyecto.fecha_entrega,
+        titulo=titulo,
+        descripcion=descripcion,
+        estudiante_id=estudiante_id,
+        profesor_id=profesor_id,
+        fecha_entrega=fecha_dt,
         version_actual=1,
         calificacion_actual=None
     )
+
     try:
         session.add(nuevo_proyecto)
         session.commit()
         session.refresh(nuevo_proyecto)
 
+        archivo_path = None
+        # Guardar archivo si se subió
+        if file is not None:
+            if UPLOAD_DIR is None:
+                raise HTTPException(status_code=503, detail="Subida de archivos deshabilitada en este servidor")
+            safe_name = f"{nuevo_proyecto.id}_" + Path(file.filename).name
+            dest = UPLOAD_DIR / safe_name
+            with dest.open("wb") as out_f:
+                shutil.copyfileobj(file.file, out_f)
+            archivo_path = str(dest)
+
         # Crear primera versión
         primera_version = ProyectoVersion(
             proyecto_id=nuevo_proyecto.id,
             numero_version=1,
-            archivo_path=proyecto.nombre_archivo,
-            descripcion=proyecto.comentarios_version,
+            archivo_path=archivo_path,
+            descripcion=comentarios_version,
             es_version_actual=True
         )
         session.add(primera_version)
@@ -196,6 +254,65 @@ def obtener_proyecto(proyecto_id: int, session: Session = Depends(get_session)):
         total_versiones=len(versiones)
     )
 
+
+@app.get("/proyectos/{proyecto_id}/archivo")
+def descargar_proyecto(proyecto_id: int, session: Session = Depends(get_session)):
+    """Descargar el archivo de la versión actual de un proyecto."""
+    proyecto = session.get(Proyecto, proyecto_id)
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    versiones = crud.obtener_versiones(session, proyecto_id)
+    if not versiones:
+        raise HTTPException(status_code=404, detail="No hay versiones para este proyecto")
+
+    current = next((v for v in versiones if v.es_version_actual), None)
+    if not current or not current.archivo_path:
+        raise HTTPException(status_code=404, detail="No hay archivo asociado a la versión actual")
+
+    path = Path(current.archivo_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado en el servidor")
+
+    mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    # Intentamos recuperar el nombre original si el archivo fue guardado con prefijo
+    name = path.name
+    # patrones: "{id}_originalname" o "{id}_v{num}_originalname"
+    m = re.match(r"^\d+_v\d+_(.+)$", name)
+    if m:
+        display_name = m.group(1)
+    else:
+        m2 = re.match(r"^(\d+)_(.+)$", name)
+        display_name = m2.group(2) if m2 else name
+    return FileResponse(path, filename=display_name, media_type=mime)
+
+
+@app.get("/proyectos/{proyecto_id}/versiones/{version_id}/archivo")
+def descargar_version_archivo(proyecto_id: int, version_id: int, session: Session = Depends(get_session)):
+    """Descargar el archivo de una versión específica de un proyecto."""
+    proyecto = session.get(Proyecto, proyecto_id)
+    if not proyecto:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+
+    versiones = crud.obtener_versiones(session, proyecto_id)
+    version = next((v for v in versiones if v.id == version_id), None)
+    if not version or not version.archivo_path:
+        raise HTTPException(status_code=404, detail="Versión o archivo no encontrado")
+
+    path = Path(version.archivo_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado en el servidor")
+
+    mime = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    name = path.name
+    m = re.match(r"^\d+_v\d+_(.+)$", name)
+    if m:
+        display_name = m.group(1)
+    else:
+        m2 = re.match(r"^(\d+)_(.+)$", name)
+        display_name = m2.group(2) if m2 else name
+    return FileResponse(path, filename=display_name, media_type=mime)
+
 @app.get("/proyectos/estudiante/{estudiante_id}")
 def obtener_proyectos_estudiante(estudiante_id: int, session: Session = Depends(get_session)):
     """Listar todos los proyectos de un estudiante"""
@@ -216,32 +333,48 @@ def obtener_proyectos_profesor(profesor_id: int, session: Session = Depends(get_
 
 # ==================== VERSIONES ====================
 @app.post("/proyectos/{proyecto_id}/versiones")
-def subir_version(proyecto_id: int, descripcion: str, session: Session = Depends(get_session)):
-    """Subir nueva versión de un proyecto"""
+def subir_version(
+    proyecto_id: int,
+    descripcion: str = Form(...),
+    file: UploadFile = File(None),
+    session: Session = Depends(get_session)
+):
+    """Subir nueva versión de un proyecto. Acepta un archivo opcional en el campo `file`."""
     proyecto = session.get(Proyecto, proyecto_id)
     if not proyecto:
         raise HTTPException(status_code=404, detail="Proyecto no encontrado")
-    
+
     # Marcar versiones anteriores como no actuales
     versiones = crud.obtener_versiones(session, proyecto_id)
     for v in versiones:
         v.es_version_actual = False
-    
+
+    archivo_path = None
+    if file is not None:
+        if UPLOAD_DIR is None:
+            raise HTTPException(status_code=503, detail="Subida de archivos deshabilitada en este servidor")
+        safe_name = f"{proyecto_id}_v{len(versiones)+1}_" + Path(file.filename).name
+        dest = UPLOAD_DIR / safe_name
+        with dest.open("wb") as out_f:
+            shutil.copyfileobj(file.file, out_f)
+        archivo_path = str(dest)
+
     # Crear nueva versión
     nueva_version = ProyectoVersion(
         proyecto_id=proyecto_id,
         numero_version=len(versiones) + 1,
         descripcion=descripcion,
+        archivo_path=archivo_path,
         es_version_actual=True
     )
-    
+
     proyecto.version_actual = nueva_version.numero_version
-    
+
     session.add(nueva_version)
     session.add(proyecto)
     session.commit()
     session.refresh(nueva_version)
-    
+
     return {"id": nueva_version.id, "numero_version": nueva_version.numero_version, "fecha": nueva_version.fecha_subida}
 
 @app.get("/proyectos/{proyecto_id}/versiones")

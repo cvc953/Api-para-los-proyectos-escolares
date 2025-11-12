@@ -55,7 +55,7 @@ pip install -r requirements.txt
 - `uvicorn[standard]==0.22.0` - Servidor ASGI
 - `sqlmodel==0.0.8` - ORM combinado SQLAlchemy + Pydantic
 - `python-jose==3.3.0` - JWT para autenticación
-- `passlib[bcrypt]==1.7.4` - Hash seguro de contraseñas
+- `passlib` - Hash seguro de contraseñas (el proyecto usa `pbkdf2_sha256` como esquema por defecto en contenedores slim)
 - `python-multipart==0.0.5` - Soporte para multipart/form-data
 
 ### 4. Verificar la Instalación
@@ -175,7 +175,69 @@ http://localhost:8000/docs
 ```
 http://localhost:8000/redoc
 ```
+
+## Docker / docker-compose (opción recomendada para desarrollo)
+
+Si prefieres ejecutar la API junto con una base de datos MySQL en contenedores, existe un `docker-compose.yml` en este directorio que levanta ambos servicios (`api` y `db`).
+
+Pasos rápidos:
+
+```bash
+cd /home/christian/Proyecto-Plataformaproyectosescolares/api_python
+# Build y levantar (primera vez o después de cambios en el código)
+sudo docker compose build --no-cache api
+sudo docker compose up -d
+
+# Ver logs del API
+sudo docker compose logs --no-color --tail 200 api
+```
+
+Nota: Si cambias el código en el workspace debes reconstruir la imagen del servicio `api` para que los cambios se reflejen (ver pasos anteriores).
 - Documentación legible en formato de referencia
+
+## Gestión de archivos subidos (UPLOAD_DIR) y permisos
+
+La aplicación guarda los archivos subidos (proyectos / versiones) en un directorio configurable a través de la variable de entorno `UPLOAD_DIR`.
+
+- Comportamiento al arrancar:
+  - Si se define `UPLOAD_DIR` en el entorno, la app intentará usar ese directorio.
+  - Si no existe, la app intentará crear `./uploads` dentro del workspace.
+  - Si `./uploads` no es creable (p. ej. filesystem read-only), la app intentará `/tmp/uploads`.
+  - Si no hay un directorio disponible o escribible, la funcionalidad de subida quedará deshabilitada y la API devolverá 503 al intentar subir archivos.
+
+Recomendación para desarrollo con Docker Compose: montar un volumen en el host y asignar permisos para que el contenedor pueda escribir archivos.
+
+Ejemplo (en tu host):
+
+```bash
+cd /home/christian/Proyecto-Plataformaproyectosescolares/api_python
+# crear carpeta uploads en el host
+mkdir -p uploads
+# (opcional) ajustar propietario al UID/GID del contenedor para evitar Permission denied
+# sustituye 1000:1000 por el UID:GID apropiado si conoces el usuario del contenedor
+sudo chown -R 1000:1000 uploads
+# para desarrollo rápido (menos seguro):
+chmod -R 0777 uploads
+```
+
+En `docker-compose.yml` puedes añadir algo así al servicio `api` para montar la carpeta:
+
+```yaml
+services:
+  api:
+    volumes:
+      - ./uploads:/app/uploads
+    environment:
+      - UPLOAD_DIR=/app/uploads
+```
+
+Nota sobre producción: para entornos reales se recomienda usar un almacenamiento de objetos (S3, MinIO) o un volumen gestionado, y no permisos 0777.
+
+### Compatibilidad MySQL y dependencias nativas
+Si usas MySQL 8 con el plugin de autenticación `caching_sha2_password`, `pymysql` puede requerir la librería `cryptography`. En imágenes "slim" esto puede necesitar instalar paquetes de compilación o incluir la rueda. Alternativa rápida: crear el usuario MySQL con `mysql_native_password`.
+
+### Cambio de esquema de hashing de contraseñas
+Para evitar problemas con dependencias nativas (bcrypt) en contenedores ligeros, el proyecto usa `pbkdf2_sha256` como esquema de hashing por defecto en entornos Docker. Esto no cambia la seguridad esperada para la mayoría de los casos de uso de la aplicación.
 
 ---
 

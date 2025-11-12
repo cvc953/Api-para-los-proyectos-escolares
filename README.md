@@ -52,6 +52,12 @@ api_python/
 ├── README-ENDPOINTS.md     # Documentación de todos los endpoints
 ├── README-EJEMPLOS.md      # Ejemplos curl y casos de uso
 └── plataforma_proyectos.db # Base de datos SQLite (se crea automáticamente)
+
+## Notas importantes
+
+- Almacenamiento de archivos: los proyectos se guardan en disco en el directorio configurado por `UPLOAD_DIR` (o `./uploads` por defecto). Si ejecutas con Docker, monta `./uploads` como volumen y asegúrate de que el contenedor tenga permisos de escritura.
+
+- Hashing de contraseñas: para evitar dependencias nativas en imágenes "slim", el proyecto usa `pbkdf2_sha256` como esquema de hash por defecto en entornos Docker. Si necesitas usar `bcrypt`, instala la dependencia y reconstruye la imagen.
 ```
 
 ---
