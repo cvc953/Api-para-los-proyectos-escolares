@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  api:
+    build: ./api_python
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # REQUIRED: Provide a full DATABASE_URL (example below) in an env file or
+      # when running the container. Example:
+      # mysql+pymysql://user:password@host:3306/dbname?charset=utf8mb4
+      DATABASE_URL: ${DATABASE_URL}
+      # Optional helpers (used by the entrypoint wait logic if you want):
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+    # The image already contains the application; do not mount source by default
+    # to keep the container self-contained in production. For development you can
+    # override this with a bind mount if desired.
+    # volumes:
+    #   - ./api_python:/app:ro
+
