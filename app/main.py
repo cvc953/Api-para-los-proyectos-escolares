@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
@@ -54,15 +54,37 @@ def root():
 
 # ==================== AUTENTICACIÓN ====================
 @app.post("/auth/registro")
-def registro(
-    email: str = Form(...),
-    password: str = Form(...),
-    nombre: str = Form(...),
-    apellido: str = Form(...),
+async def registro(
+    request: Request,
+    email: Optional[str] = Form(None),
+    password: Optional[str] = Form(None),
+    nombre: Optional[str] = Form(None),
+    apellido: Optional[str] = Form(None),
     rol: str = Form("estudiante"),
     session: Session = Depends(get_session)
 ):
-    """Registrar nuevo usuario (estudiante, profesor o padre)"""
+    """Registrar nuevo usuario (estudiante, profesor o padre).
+
+    Esta implementación acepta form-data (POST -F ...) y, como fallback,
+    acepta parámetros por query (ej: ?email=...&password=...). Esto evita
+    que una llamada con query provoque un 500 por falta de datos.
+    """
+    # Si los campos no vinieron como form, leer de query params
+    if not email:
+        email = request.query_params.get("email")
+    if not password:
+        password = request.query_params.get("password")
+    if not nombre:
+        nombre = request.query_params.get("nombre")
+    if not apellido:
+        apellido = request.query_params.get("apellido")
+    if not rol:
+        rol = request.query_params.get("rol", "estudiante")
+
+    # Validaciones mínimas
+    if not email or not password or not nombre or not apellido:
+        raise HTTPException(status_code=422, detail="Faltan campos obligatorios: email, password, nombre, apellido")
+
     # Verificar si existe
     statement = select(Estudiante).where(Estudiante.email == email)
     if session.exec(statement).first():
