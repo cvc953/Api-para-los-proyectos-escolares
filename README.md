@@ -76,8 +76,8 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 3. Acceder a Documentación Interactiva
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI**: http://172.200.176.171:8000/docs
+- **ReDoc**: http://172.200.176.171:8000/redoc
 
 ---
 
@@ -101,7 +101,7 @@ Este proyecto incluye **4 documentos README** temáticos:
 
 ## Contacto y Soporte
 
-- **Documentación Interactiva**: http://localhost:8000/docs
+- **Documentación Interactiva**: http://172.200.176.171:8000/docs
 - **Archivo de Configuración**: `appsettings.json`
 - **Base de Datos**: `plataforma_proyectos.db`
 
