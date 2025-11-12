@@ -8,7 +8,10 @@ SECRET_KEY = "cambiame_esta_clave_por_una_segura"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use a pure-Python safe hashing scheme to avoid compiled bcrypt issues inside
+# slim containers. pbkdf2_sha256 is widely supported and doesn't require
+# the native bcrypt C extension.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 users_db = {
     # Ejemplo: usuario: {"id":1, "email":"...", "password_hash":... , "role":"estudiante"}
