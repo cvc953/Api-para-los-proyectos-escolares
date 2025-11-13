@@ -15,7 +15,7 @@ def run_migration():
     engine = create_engine(DATABASE_URL)
     
     try:
-        with engine.connect() as connection:
+        with engine.begin() as connection:
             print("Running migration...")
             
             # Check if column already exists
@@ -36,7 +36,6 @@ def run_migration():
             connection.execute(text("""
                 ALTER TABLE proyectoversion ADD COLUMN estudiante_id INT NULL
             """))
-            connection.commit()
             print("✓ Column added successfully")
             
             # Add foreign key constraint
@@ -45,7 +44,6 @@ def run_migration():
                 ALTER TABLE proyectoversion ADD CONSTRAINT fk_proyectoversion_estudiante 
                 FOREIGN KEY (estudiante_id) REFERENCES estudiante(id) ON DELETE SET NULL
             """))
-            connection.commit()
             print("✓ Foreign key constraint added")
             
             # Create index
@@ -53,7 +51,6 @@ def run_migration():
             connection.execute(text("""
                 CREATE INDEX idx_proyectoversion_estudiante_id ON proyectoversion(estudiante_id)
             """))
-            connection.commit()
             print("✓ Index created")
             
             print("\n✅ Migration completed successfully!")
