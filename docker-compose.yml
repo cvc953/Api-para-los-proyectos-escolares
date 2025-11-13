@@ -36,7 +36,7 @@ services:
       # For development you can bind-mount the source directory. In compose this
       # file is inside `api_python/`, so `.` maps to that folder.
       - ./:/app:ro
-  - ./uploads:/app/uploads:rw
+      - ./uploads:/app/uploads:rw
 
 volumes:
   db_data:
