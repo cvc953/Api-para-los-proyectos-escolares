@@ -669,7 +669,12 @@ def crear_curso(curso: CursoCreate, session: Session = Depends(get_session)):
 
 @app.post("/cursos/{curso_id}/estudiantes")
 def agregar_estudiante_curso(curso_id: int, dto: AddStudentDTO, session: Session = Depends(get_session)):
-    """Agregar un estudiante a un curso existente."""
+    """Agregar un estudiante a un curso existente.
+    
+    Al inscribir un estudiante en un curso, automáticamente tiene acceso a TODOS los 
+    proyectos/asignaciones de ese curso (pasados, presentes y futuros).
+    No se crean copias - el sistema valida la inscripción al curso al momento de subir entregas.
+    """
     curso = session.get(Curso, curso_id)
     if not curso:
         raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -677,10 +682,30 @@ def agregar_estudiante_curso(curso_id: int, dto: AddStudentDTO, session: Session
     if not estudiante:
         raise HTTPException(status_code=400, detail="Estudiante no encontrado")
 
+    # Verificar si ya está inscrito
+    stmt_check = select(CursoEstudiante).where(
+        CursoEstudiante.curso_id == curso_id,
+        CursoEstudiante.estudiante_id == dto.estudiante_id
+    )
+    ya_inscrito = session.exec(stmt_check).first()
+    if ya_inscrito:
+        raise HTTPException(status_code=400, detail="El estudiante ya está inscrito en este curso")
+
     enlace = CursoEstudiante(curso_id=curso_id, estudiante_id=dto.estudiante_id)
     try:
         creado = crud.agregar_estudiante_a_curso(session, enlace)
-        return {"id": creado.id, "curso_id": creado.curso_id, "estudiante_id": creado.estudiante_id}
+        
+        # Contar proyectos existentes en el curso
+        stmt_proyectos = select(Proyecto).where(Proyecto.curso_id == curso_id)
+        proyectos_curso = session.exec(stmt_proyectos).all()
+        
+        return {
+            "id": creado.id, 
+            "curso_id": creado.curso_id, 
+            "estudiante_id": creado.estudiante_id,
+            "proyectos_asignados": len(proyectos_curso),
+            "mensaje": f"Estudiante inscrito correctamente. Tiene acceso a {len(proyectos_curso)} proyecto(s) del curso."
+        }
     except Exception as e:
         try:
             session.rollback()
