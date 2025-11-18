@@ -513,8 +513,10 @@ def obtener_proyecto(proyecto_id: int, session: Session = Depends(get_session), 
             if len(parts) == 2 and parts[0].lower() == 'bearer':
                 token = parts[1]
                 payload = decode_access_token(token)
+                print(f"[DEBUG] GET /proyectos/{proyecto_id} - Token payload: {payload}")
                 if payload and payload.get('role') == 'estudiante':
                     est_id = payload.get('id')
+                    print(f"[DEBUG] Estudiante ID: {est_id}, proyecto.curso_id: {proyecto.curso_id}, proyecto.estudiante_id: {proyecto.estudiante_id}")
                     if est_id is not None:
                         # Caso 1: Proyecto asignado a curso - verificar inscripción
                         if proyecto.curso_id is not None:
@@ -524,12 +526,16 @@ def obtener_proyecto(proyecto_id: int, session: Session = Depends(get_session), 
                             )
                             enlace = session.exec(stmt).first()
                             es_asignado = enlace is not None
+                            print(f"[DEBUG] Inscripción en curso {proyecto.curso_id}: {es_asignado}")
                         # Caso 2: Proyecto asignado directamente al estudiante
                         elif proyecto.estudiante_id is not None and proyecto.estudiante_id == est_id:
                             es_asignado = True
+                            print(f"[DEBUG] Proyecto asignado directamente: True")
                         else:
                             es_asignado = False
-    except Exception:
+                            print(f"[DEBUG] No asignado (no curso ni estudiante_id)")
+    except Exception as e:
+        print(f"[DEBUG] Error determinando asignación: {e}")
         es_asignado = None
 
     return ProyectoResponse(
