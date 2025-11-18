@@ -16,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
 
   api:
     build: .
@@ -33,11 +35,17 @@ services:
       DATABASE_URL: ${DATABASE_URL:-mysql+pymysql://${MYSQL_USER:-appuser}:${MYSQL_PASSWORD:-apppassword}@db:3306/${MYSQL_DATABASE:-plataforma_proyectos}?charset=utf8mb4}
       UPLOAD_DIR: /app/uploads
     volumes:
-      # For development you can bind-mount the source directory. In compose this
-      # file is inside `api_python/`, so `.` maps to that folder.
-      - ./:/app:ro
+      - ./app:/app/app:ro
+      - ./migrate_estudiante_id.py:/app/migrate_estudiante_id.py:ro
+      - ./migrate_calificacion_per_student.py:/app/migrate_calificacion_per_student.py:ro
+      - ./docker-entrypoint.sh:/app/docker-entrypoint.sh:ro
       - ./uploads:/app/uploads:rw
+    networks:
+      - app-network
 
 volumes:
   db_data:
 
+networks:
+  app-network:
+    driver: bridge
