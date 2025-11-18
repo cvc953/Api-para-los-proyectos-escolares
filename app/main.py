@@ -538,7 +538,9 @@ def obtener_proyecto(proyecto_id: int, session: Session = Depends(get_session), 
         print(f"[DEBUG] Error determinando asignación: {e}")
         es_asignado = None
 
-    return ProyectoResponse(
+    print(f"[DEBUG] VALOR FINAL es_asignado antes de responder: {es_asignado}")
+    
+    response = ProyectoResponse(
         id=proyecto.id,
         titulo=proyecto.titulo,
         descripcion=proyecto.descripcion,
@@ -552,6 +554,10 @@ def obtener_proyecto(proyecto_id: int, session: Session = Depends(get_session), 
         total_versiones=len(versiones),
         es_estudiante_asignado=es_asignado
     )
+    
+    print(f"[DEBUG] Respuesta serializada: es_estudiante_asignado={response.es_estudiante_asignado}")
+    
+    return response
 
 
 @app.get("/proyectos/{proyecto_id}/archivo")
