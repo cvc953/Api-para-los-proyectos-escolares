@@ -5,4 +5,5 @@ python-jose==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.5
 PyMySQL==1.0.3
+psycopg2-binary>=2.9.0
 cryptography>=40.0.0
