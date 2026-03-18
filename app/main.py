@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -25,11 +26,22 @@ from app.crud import crud
 from app.models.models import Curso, CursoEstudiante, Tarea
 from app.schemas.schemas import CursoCreate, CursoResponse, AddStudentDTO, TareaCreate, TareaResponse
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for startup and shutdown events."""
+    # Startup: Initialize database
+    init_db()
+    yield
+    # Shutdown: cleanup if needed
+
+
 # Inicializar FastAPI
 app = FastAPI(
     title="API Gestión Proyectos Escolares",
     description="API REST para gestión de proyectos escolares con versioning y calificaciones",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS
@@ -40,11 +52,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Inicializar BD
-@app.on_event("startup")
-def on_startup():
-    init_db()
 
 # Carpeta donde se guardan los archivos subidos.
 # Intentamos crearla en orden: variable env -> /tmp/uploads. Si ninguna es escribible,
