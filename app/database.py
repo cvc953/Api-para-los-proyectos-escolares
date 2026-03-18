@@ -12,9 +12,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./plataforma_proyectos.db")
 # For MySQL/PostgreSQL, enable pool_pre_ping to avoid stale connection errors.
 # Use psycopg for PostgreSQL connections.
 if DATABASE_URL.startswith("postgresql"):
-    # Use psycopg (v3) driver
+    # Use psycopg (v3) driver for better serverless support
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    # For Neon/serverless: disable pooling to avoid connection issues
+    engine = create_engine(
+        DATABASE_URL, 
+        pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=0,
+        pool_recycle=300,
+        connect_args={"connect_timeout": 10}
+    )
 elif DATABASE_URL.startswith("mysql"):
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 else:
