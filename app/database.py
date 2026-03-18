@@ -4,13 +4,18 @@ from sqlmodel import SQLModel, create_engine, Session
 # Read database URL from environment. Example MySQL URL:
 #  mysql+pymysql://user:password@host:3306/dbname?charset=utf8mb4
 # For PostgreSQL (Neon, Supabase, etc.):
-#  postgresql://user:password@host/dbname
+#  postgresql+psycopg://user:password@host/dbname
+# Or simply: postgresql://user:password@host/dbname (sqlalchemy will auto-detect)
 # Defaults to a local SQLite file for development.
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./plataforma_proyectos.db")
 
 # For MySQL/PostgreSQL, enable pool_pre_ping to avoid stale connection errors.
-# SQLModel's create_engine simply forwards options to SQLAlchemy.
-if DATABASE_URL.startswith("mysql") or DATABASE_URL.startswith("postgresql"):
+# Use psycopg for PostgreSQL connections.
+if DATABASE_URL.startswith("postgresql"):
+    # Use psycopg (v3) driver
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+elif DATABASE_URL.startswith("mysql"):
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 else:
     engine = create_engine(DATABASE_URL, echo=False)
